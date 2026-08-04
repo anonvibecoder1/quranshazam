@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import tempfile
 import asyncio
 from typing import Optional
@@ -14,7 +15,7 @@ from core.recognizer import AudioRecognizer
 from core.audio import extract_pcm_from_file
 from core.fingerprint import fingerprint_audio
 from core.media import process_media_url, extract_url_from_text
-from crawler.tme_crawler import parse_caption_metadata
+from crawler.tme_crawler import parse_caption_metadata, TelegramChannelCrawler
 import config
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -169,10 +170,47 @@ async def process_action(query, action: str, message: Update.message):
         except BadRequest as e:
             if "File is too big" in str(e):
                 if forward_url:
-                    await update_progress(status_msg, "تحميل عبر الرابط", 30, f"حجم الملف كبير، جاري التحميل المباشر من:\n`{forward_url}`...")
-                    samples, duration, title = await asyncio.to_thread(process_media_url, forward_url)
+                    if action == "index":
+                        await update_progress(status_msg, "تحميل عبر MTProto", 30, f"حجم الملف كبير، جاري التحميل المباشر من تليجرام:\n`{forward_url}`...")
+                        crawler = TelegramChannelCrawler()
+                        track_id = await asyncio.to_thread(crawler.ingest_post_url, forward_url)
+                        stats = db.get_stats()
+                        await update_progress(status_msg, "تم الحفظ بالموسوعة", 100, "تمت الفهرسة عبر MTProto بنجاح!")
+                        msg_done = (
+                            f"✅ **تمت إضافة التلاوة بنجاح إلى الموسوعة عبر MTProto!**\n\n"
+                            f"🆔 **رقم التلاوة**: `{track_id}`\n"
+                            f"🔗 **الرابط**: {forward_url}\n\n"
+                            f"📊 **إجمالي التلاوات في الموسوعة**: `{stats['tracks']}`"
+                        )
+                        await status_msg.edit_text(msg_done, parse_mode=ParseMode.MARKDOWN)
+                        return
+                    else:
+                        # RECOGNIZE ACTION for large post > 20 MB
+                        await update_progress(status_msg, "تحميل عبر MTProto", 30, f"حجم الملف كبير، جاري جلب الصوت من تليجرام:\n`{forward_url}`...")
+                        crawler = TelegramChannelCrawler()
+                        match_url = re.search(r't\.me/([^/]+)/(\d+)', forward_url)
+                        if match_url:
+                            ch, msg_id_num = match_url.group(1), int(match_url.group(2))
+                            
+                            def download_mtproto_sync():
+                                from telethon import TelegramClient
+                                API_ID, API_HASH = 2040, "b18441a12607e10979b050123651490e"
+                                client = TelegramClient("telethon_rec_sync", API_ID, API_HASH)
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                async def _run():
+                                    await client.start(bot_token=config.TELEGRAM_BOT_TOKEN)
+                                    msg = await client.get_messages(ch, ids=msg_id_num)
+                                    if msg and msg.media:
+                                        await client.download_media(msg, file=tmp_path)
+                                    await client.disconnect()
+                                loop.run_until_complete(_run())
+                                loop.close()
+
+                            await asyncio.to_thread(download_mtproto_sync)
+                            samples, duration = await asyncio.to_thread(extract_pcm_from_file, tmp_path)
                 else:
-                    await status_msg.edit_text("⚠️ **الملف كبير جداً** (يتجاوز 20MB حد تليجرام البوتات). أرسل مقطعاً أقصر أو رابطاً.")
+                    await status_msg.edit_text("⚠️ **الملف كبير جداً** (يتجاوز 20MB حد تليجرام البوتات المباشرة). أرسل رابط المقطع أو حوّل المنشور من القناة.")
                     return
             else:
                 raise e
