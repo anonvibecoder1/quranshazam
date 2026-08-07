@@ -24,8 +24,28 @@ logger = logging.getLogger("QuranShazamBot")
 db = Database()
 recognizer = AudioRecognizer(db)
 
-# In-memory storage for pending user media messages
-pending_messages = {}
+def copy_local_bot_file(file_path_str: str, target_path: str) -> bool:
+    """
+    Copies a file downloaded by the Local Telegram Bot API Server to target_path,
+    handling Docker container permission locks via elevated chown.
+    """
+    if not file_path_str:
+        return False
+
+    local_disk_path = file_path_str.replace("/var/lib/telegram-bot-api", "/tmp/telegram-bot-api-data")
+    import subprocess
+
+    for candidate_path in [local_disk_path, file_path_str]:
+        try:
+            res = subprocess.run(["sudo", "cp", candidate_path, target_path], capture_output=True)
+            if res.returncode == 0:
+                subprocess.run(["sudo", "chown", "ptero:ptero", target_path], capture_output=True)
+                if os.path.exists(target_path) and os.path.getsize(target_path) > 0:
+                    return True
+        except Exception:
+            pass
+
+    return False
 
 async def update_progress(status_msg, stage_name: str, percent: int, description: str):
     """Updates the Telegram status message with an animated progress bar and detailed stage description."""
@@ -165,18 +185,9 @@ async def process_action(query, action: str, message: Update.message):
         try:
             telegram_file = await media_obj.get_file()
             file_path_str = getattr(telegram_file, "file_path", "") or ""
-            local_disk_path = file_path_str.replace("/var/lib/telegram-bot-api", "/tmp/telegram-bot-api-data")
 
-            # Fix permissions on local container data folder
-            os.system("sudo chmod -R 777 /tmp/telegram-bot-api-data 2>/dev/null")
-
-            if file_path_str and os.path.exists(local_disk_path):
-                import shutil
-                shutil.copy(local_disk_path, tmp_path)
-            elif file_path_str and os.path.exists(file_path_str):
-                import shutil
-                shutil.copy(file_path_str, tmp_path)
-            else:
+            copied = copy_local_bot_file(file_path_str, tmp_path)
+            if not copied:
                 await telegram_file.download_to_drive(tmp_path)
 
             await update_progress(status_msg, "معالجة الصوت", 40, "جاري تحويل وتصفية نبرة الصوت (FFmpeg)...")
