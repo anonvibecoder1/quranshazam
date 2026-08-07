@@ -164,7 +164,18 @@ async def process_action(query, action: str, message: Update.message):
 
         try:
             telegram_file = await media_obj.get_file()
-            await telegram_file.download_to_drive(tmp_path)
+            file_path_str = getattr(telegram_file, "file_path", "") or ""
+            local_disk_path = file_path_str.replace("/var/lib/telegram-bot-api", "/tmp/telegram-bot-api-data")
+
+            if file_path_str and os.path.exists(local_disk_path):
+                import shutil
+                shutil.copy(local_disk_path, tmp_path)
+            elif file_path_str and os.path.exists(file_path_str):
+                import shutil
+                shutil.copy(file_path_str, tmp_path)
+            else:
+                await telegram_file.download_to_drive(tmp_path)
+
             await update_progress(status_msg, "معالجة الصوت", 40, "جاري تحويل وتصفية نبرة الصوت (FFmpeg)...")
             samples, duration = await asyncio.to_thread(extract_pcm_from_file, tmp_path)
         except BadRequest as e:
