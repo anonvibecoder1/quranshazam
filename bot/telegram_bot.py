@@ -24,6 +24,9 @@ logger = logging.getLogger("QuranShazamBot")
 db = Database()
 recognizer = AudioRecognizer(db)
 
+# In-memory storage for pending user media messages
+pending_messages = {}
+
 def copy_local_bot_file(file_path_str: str, target_path: str) -> bool:
     """
     Copies a file downloaded by the Local Telegram Bot API Server to target_path,
