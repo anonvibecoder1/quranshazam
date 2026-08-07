@@ -167,6 +167,9 @@ async def process_action(query, action: str, message: Update.message):
             file_path_str = getattr(telegram_file, "file_path", "") or ""
             local_disk_path = file_path_str.replace("/var/lib/telegram-bot-api", "/tmp/telegram-bot-api-data")
 
+            # Fix permissions on local container data folder
+            os.system("sudo chmod -R 777 /tmp/telegram-bot-api-data 2>/dev/null")
+
             if file_path_str and os.path.exists(local_disk_path):
                 import shutil
                 shutil.copy(local_disk_path, tmp_path)
