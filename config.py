@@ -29,9 +29,11 @@ MAX_TIME_DELTA = 5.0  # seconds
 FREQ_BITS = 10        # quantization bits for frequency (0..1023)
 
 # Telegram Bot Config
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8776235491:AAF1o4qO0ByJrnrDGp7QihZUp4bOFqgYb-w")
+TELEGRAM_API_ID = int(os.getenv("TELEGRAM_API_ID", "0"))
+TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH", "")
 
 # Default Reciter Settings
 DEFAULT_RECITER_SLUG = "minshawi"
 DEFAULT_RECITER_NAME = "Mohamed Siddiq El-Minshawi (محمد صديق المنشاوي)"
-DEFAULT_CHANNEL_URL = "https://t.me/s/MinshawiEncyclopedia"
+DEFAULT_CHANNEL_URL = "https://t.me/s/AlminshawiEncyclopedia"
