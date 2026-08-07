@@ -35,18 +35,29 @@ def copy_local_bot_file(file_path_str: str, target_path: str) -> bool:
     if not file_path_str:
         return False
 
-    local_disk_path = file_path_str.replace("/var/lib/telegram-bot-api", "/tmp/telegram-bot-api-data")
-    import subprocess
+    token_str = config.TELEGRAM_BOT_TOKEN
+    clean_path = file_path_str
+    if token_str and token_str in clean_path:
+        clean_path = clean_path.split(f"/{token_str}/")[-1]
 
-    for candidate_path in [local_disk_path, file_path_str]:
+    clean_path = clean_path.replace("/var/lib/telegram-bot-api/", "").replace("/var/lib/telegram-bot-api", "").lstrip("/")
+
+    bot_dir = f"/tmp/telegram-bot-api-data/{token_str}"
+    host_disk_path = os.path.join(bot_dir, clean_path)
+
+    import subprocess
+    logger.info(f"Local Bot API file resolution: raw='{file_path_str}' -> host_path='{host_disk_path}'")
+
+    for candidate_path in [host_disk_path, file_path_str]:
         try:
             res = subprocess.run(["sudo", "cp", candidate_path, target_path], capture_output=True)
             if res.returncode == 0:
                 subprocess.run(["sudo", "chown", "ptero:ptero", target_path], capture_output=True)
                 if os.path.exists(target_path) and os.path.getsize(target_path) > 0:
+                    logger.info(f"Successfully copied {os.path.getsize(target_path)} bytes from {candidate_path} to {target_path}")
                     return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to copy candidate {candidate_path}: {e}")
 
     return False
 
